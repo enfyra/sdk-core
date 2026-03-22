@@ -203,12 +203,38 @@ ws.disconnect();
 
 ##### Direct HTTP Methods
 
+Use these for custom API endpoints that don't fit the CRUD pattern:
+
 ```typescript
-await client.get<T>(endpoint, options);
-await client.post<T>(endpoint, body, options);
-await client.put<T>(endpoint, body, options);
-await client.patch<T>(endpoint, body, options);
-await client.delete<T>(endpoint, options);
+// GET request
+const users = await client.get<UsersResponse>('/users', {
+  query: { status: 'active', limit: 10 }
+});
+
+// POST request
+const result = await client.post<CreateResponse>('/custom-action', {
+  email: 'user@example.com',
+  action: 'send_email'
+});
+
+// PUT request
+const updated = await client.put<UpdateResponse>('/settings', {
+  theme: 'dark',
+  language: 'en'
+});
+
+// PATCH request
+const partial = await client.patch<UpdateResponse>('/profile', {
+  name: 'New Name'
+});
+
+// DELETE request
+await client.delete('/temp-data');
+
+// With custom headers
+await client.get('/admin/data', {
+  headers: { 'X-Custom-Header': 'value' }
+});
 ```
 
 ### AuthManager

@@ -23,6 +23,7 @@ export class AuthManager {
   private http: HttpClient;
   private tokens: AuthTokens | null = null;
   private refreshThreshold: number = 2 * 60 * 1000;
+  private refreshPromise: Promise<AuthTokens> | null = null;
 
   constructor(http: HttpClient) {
     this.http = http;
@@ -86,9 +87,9 @@ export class AuthManager {
     const encodedAccessToken = encodeURIComponent(accessToken);
     const encodedRefreshToken = encodeURIComponent(refreshToken);
 
-    document.cookie = `accessToken=${encodedAccessToken}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax${secureAttr}`;
-    document.cookie = `refreshToken=${encodedRefreshToken}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax${secureAttr}`;
-    document.cookie = `expTime=${expTime}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Lax${secureAttr}`;
+    document.cookie = `accessToken=${encodedAccessToken}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Strict${secureAttr}`;
+    document.cookie = `refreshToken=${encodedRefreshToken}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Strict${secureAttr}`;
+    document.cookie = `expTime=${expTime}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Strict${secureAttr}`;
   }
 
   private clearCookies(): void {
@@ -97,12 +98,10 @@ export class AuthManager {
     const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
     const secureAttr = isSecure ? '; Secure' : '';
 
-    // Clear cookies by setting max-age=0 and empty value
-    document.cookie = `accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secureAttr}`;
-    document.cookie = `refreshToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secureAttr}`;
-    document.cookie = `expTime=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secureAttr}`;
+    document.cookie = `accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict${secureAttr}`;
+    document.cookie = `refreshToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict${secureAttr}`;
+    document.cookie = `expTime=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict${secureAttr}`;
 
-    // Also remove Authorization header
     this.http.removeHeader('Authorization');
   }
 
@@ -217,15 +216,17 @@ export class AuthManager {
 
   async getToken(): Promise<string | null> {
     if (!this.tokens) return null;
-    
-    if (this.isTokenExpiringSoon()) {
-      await this.refreshToken();
+
+    if (this.isTokenExpiringSoon() || !this.isTokenValid()) {
+      // Deduplicate concurrent refresh requests
+      if (!this.refreshPromise) {
+        this.refreshPromise = this.refreshToken().finally(() => {
+          this.refreshPromise = null;
+        });
+      }
+      await this.refreshPromise;
     }
-    
-    if (!this.isTokenValid()) {
-      await this.refreshToken();
-    }
-    
+
     return this.tokens?.accessToken || null;
   }
 

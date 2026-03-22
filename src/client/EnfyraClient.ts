@@ -44,11 +44,11 @@ export class EnfyraClient {
   }
 
   setHeader(key: string, value: string): void {
-    (this.http as any).defaultHeaders[key] = value;
+    this.http.setHeader(key, value);
   }
 
   removeHeader(key: string): void {
-    delete (this.http as any).defaultHeaders[key];
+    this.http.removeHeader(key);
   }
 
   setAuthToken(token: string): void {

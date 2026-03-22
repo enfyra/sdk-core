@@ -109,7 +109,11 @@ export class HttpClient {
         lastError = error;
         attempts++;
 
-        if ((error.statusCode && error.statusCode >= 400 && error.statusCode < 500)) {
+        if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
+          break;
+        }
+
+        if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
           break;
         }
 
@@ -124,10 +128,12 @@ export class HttpClient {
 
   private handleError(error: any): EnfyraError {
     const statusCode = error.statusCode || error.status;
-    
+
     let code: EnfyraErrorCode = 'SERVER_ERROR';
-    
-    if (!statusCode) {
+
+    if (error.code === 'TIMEOUT' || error.message?.includes('timeout')) {
+      code = 'TIMEOUT_ERROR';
+    } else if (!statusCode) {
       code = 'NETWORK_ERROR';
     } else if (statusCode === 401) {
       code = 'UNAUTHORIZED';
