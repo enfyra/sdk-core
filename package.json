@@ -1,0 +1,45 @@
+{
+  "name": "@enfyra/core",
+  "version": "0.1.0",
+  "description": "Core API client for Enfyra",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "unbuild",
+    "dev": "vitest",
+    "test": "vitest run",
+    "test:api": "vitest run tests/api.test.ts",
+    "test:ws": "vitest run tests/websocket.e2e.test.ts",
+    "dev:playground": "vite playground",
+    "build:playground": "vite build playground",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ofetch": "^1.4.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/socket.io-client": "^3.0.0",
+    "eslint": "^9.22.0",
+    "typescript": "^5.8.2",
+    "unbuild": "^3.5.0",
+    "vitest": "^3.0.9"
+  },
+  "peerDependencies": {
+    "typescript": "^5.x"
+  }
+}
