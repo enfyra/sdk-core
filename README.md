@@ -237,6 +237,48 @@ await client.get('/admin/data', {
 });
 ```
 
+##### Response & Error Hooks
+
+Transform responses and errors globally:
+
+```typescript
+// Response transformer - modify all responses
+client.http.onResponse((response) => {
+  // Log response, modify data, etc.
+  console.log('API Response:', response);
+  return response;
+});
+
+// Async response transformer
+client.http.onResponse(async (response) => {
+  // Fetch additional data if needed
+  if (response.status === 200) {
+    // Do something with response
+  }
+  return response;
+});
+
+// Error transformer - handle errors globally
+client.http.onError((error) => {
+  // Log errors, show notifications, etc.
+  if (error.code === 'UNAUTHORIZED') {
+    window.location.href = '/login';
+  }
+  return error;
+});
+
+// Async error transformer
+client.http.onError(async (error) => {
+  // Retry logic, refresh token, etc.
+  if (error.code === 'UNAUTHORIZED') {
+    await refreshToken();
+  }
+  return error;
+});
+```
+
+**Note:** Multiple transformers can be registered. They execute in the order they were added.
+
 ### AuthManager
 
 ```typescript

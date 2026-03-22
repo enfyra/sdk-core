@@ -106,5 +106,13 @@ export interface WebSocketConfig {
 export type WebSocketEvent = 'connect' | 'disconnect' | 'error' | string;
 export type WebSocketEventHandler = (data: any) => void;
 
+export interface ResponseTransformer<T = any> {
+  (response: HttpResponse<T>): HttpResponse<T> | Promise<HttpResponse<T>>;
+}
+
+export interface ErrorTransformer {
+  (error: any): any | Promise<any>;
+}
+
 // Auth types
 export { AuthTokens, LoginCredentials, UserInfo } from '../auth/AuthManager';

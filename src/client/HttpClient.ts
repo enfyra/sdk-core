@@ -1,6 +1,6 @@
 import { $fetch } from 'ofetch';
 import { EnfyraError } from '../errors/EnfyraError';
-import type { HttpClientConfig, HttpRequestOptions, HttpResponse, EnfyraErrorCode } from '../types';
+import type { HttpClientConfig, HttpRequestOptions, HttpResponse, EnfyraErrorCode, ResponseTransformer, ErrorTransformer } from '../types';
 
 export class HttpClient {
   private baseUrl: string;
@@ -9,6 +9,8 @@ export class HttpClient {
   private retries: number;
   private retryDelay: number;
   private onBeforeRequest?: () => Promise<void>;
+  private responseTransformers: ResponseTransformer[] = [];
+  private errorTransformers: ErrorTransformer[] = [];
 
   constructor(config: HttpClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
@@ -20,6 +22,14 @@ export class HttpClient {
 
   setOnBeforeRequest(callback: () => Promise<void>): void {
     this.onBeforeRequest = callback;
+  }
+
+  onResponse(transformer: ResponseTransformer): void {
+    this.responseTransformers.push(transformer);
+  }
+
+  onError(transformer: ErrorTransformer): void {
+    this.errorTransformers.push(transformer);
   }
 
   setHeader(key: string, value: string): void {
@@ -99,12 +109,19 @@ export class HttpClient {
         const responseData = fullResponse.data || fullResponse;
         const meta = fullResponse.meta;
 
-        return {
+        let response: HttpResponse<T> = {
           data: responseData,
           status: fullResponse.statusCode || 200,
           headers: new Headers(),
           meta,
         };
+
+        // Apply response transformers
+        for (const transformer of this.responseTransformers) {
+          response = await transformer(response);
+        }
+
+        return response;
       } catch (error: any) {
         lastError = error;
         attempts++;
@@ -126,7 +143,7 @@ export class HttpClient {
     throw this.handleError(lastError);
   }
 
-  private handleError(error: any): EnfyraError {
+  private async handleError(error: any): Promise<never> {
     const statusCode = error.statusCode || error.status;
 
     let code: EnfyraErrorCode = 'SERVER_ERROR';
@@ -147,12 +164,19 @@ export class HttpClient {
       code = 'VALIDATION_ERROR';
     }
 
-    return new EnfyraError({
+    let enfyraError = new EnfyraError({
       code,
       message: error.message || error.data?.message || 'Request failed',
       statusCode,
       details: error.data || error.response,
     });
+
+    // Apply error transformers
+    for (const transformer of this.errorTransformers) {
+      enfyraError = await transformer(enfyraError);
+    }
+
+    throw enfyraError;
   }
 
   get<T>(endpoint: string, options?: Omit<HttpRequestOptions, 'method' | 'body'>): Promise<HttpResponse<T>> {
