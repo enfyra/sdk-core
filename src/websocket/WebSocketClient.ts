@@ -6,10 +6,19 @@ interface SocketIO {
   emit(event: string, ...args: any[]): void;
   disconnect(): void;
   connected: boolean;
+  id: string;
+  io: {
+    engine: {
+      transport?: {
+        name: string;
+      };
+    };
+  };
+  onAny(callback: (event: string, ...args: any[]) => void): void;
 }
 
 interface SocketIOClientStatic {
-  (url: string, options?: any): SocketIO;
+  (url: string, options?: any): any;
 }
 
 export class WebSocketClient {
@@ -31,7 +40,6 @@ export class WebSocketClient {
   private async loadSocketIO() {
     if (!this.socketIOClient) {
       try {
-        // Try to import socket.io-client (Node.js/browser)
         const io = await import('socket.io-client');
         this.socketIOClient = io.io;
       } catch {
@@ -50,16 +58,12 @@ export class WebSocketClient {
       let socketUrl: string;
 
       if (this.config.baseUrl && /^https?:\/\//.test(this.config.baseUrl)) {
-        socketUrl = this.config.baseUrl.replace(/\/+$/, ''); // Remove trailing slash
+        socketUrl = this.config.baseUrl.replace(/\/+$/, '');
       } else {
         socketUrl = typeof window !== 'undefined' ? window.location.origin : '';
       }
 
-      console.log('[WS] Connecting to:', socketUrl, 'with namespace:', namespace);
-
-      // socket.io-client: connect to namespace by appending to URL
-      // e.g., io('http://localhost:3000/chat') connects to /chat namespace
-      this.ws = io(socketUrl + namespace, {
+      const ws = io(socketUrl + namespace, {
         path: '/socket.io',
         transports: ['polling', 'websocket'],
         query: { reconnect: String(this.config.reconnect) },
@@ -72,86 +76,47 @@ export class WebSocketClient {
         forceNew: true,
       });
 
-      // Debug: Log socket.io connection details
-      this.ws.on('connect', () => {
-        console.log('[WS DEBUG] Connected with transport:', this.ws.io.engine?.transport?.name);
+      this.ws = ws;
+
+      ws.on('connect', () => {
         this.reconnectAttempts = 0;
         this._emitLocal('connect', {});
       });
 
-      this.ws.on('connect_error', (error: any) => {
-        console.error('[WS DEBUG] connect_error:', error.message, 'sid:', this.ws.id);
+      ws.on('connect_error', (error: any) => {
         this._emitLocal('connect_error', error);
       });
 
-      this.ws.on('reconnect', (attempt: number) => {
-        console.log('[WS DEBUG] Reconnected after', attempt, 'attempts, new sid:', this.ws.id);
+      ws.on('disconnect', (reason: any) => {
+        this._emitLocal('disconnect', { reason });
       });
 
-      this.ws.on('reconnect_attempt', (attempt: number) => {
-        console.log('[WS DEBUG] Reconnect attempt', attempt, 'with sid:', this.ws.id);
+      ws.on('backend_disconnected', (data: any) => {
+        this._emitLocal('backend_disconnected', data);
       });
 
-      this.ws.on('reconnect_error', (error: Error) => {
-        console.error('[WS DEBUG] Reconnect error:', error.message, 'sid:', this.ws.id);
+      ws.on('backend_reconnected', () => {
+        this._emitLocal('backend_reconnected', {});
       });
 
-      this.ws.on('reconnect_failed', () => {
-        console.error('[WS DEBUG] Reconnect failed, max attempts reached');
+      ws.on('backend_connect_error', (data: any) => {
+        this._emitLocal('backend_connect_error', data);
       });
 
-      // Generic message handler - forwards all custom events
-      this.ws.onAny((event: string, ...args: any[]) => {
-        // Skip Socket.IO reserved events
+      ws.onAny((event: string, ...args: any[]) => {
         if (!['connect', 'connect_error', 'disconnect', 'error', 'reconnect', 'reconnect_attempt'].includes(event)) {
           this._emitLocal(event, args[0]);
         }
       });
-
-      this.ws.on('disconnect', (reason: any) => {
-        console.log('[WS DEBUG] Disconnected, reason:', reason, 'sid:', this.ws.id);
-        this._emitLocal('disconnect', { reason });
-      });
-
-      // Handle backend disconnection/reconnection (from Nuxt relay)
-      this.ws.on('backend_disconnected', (data: any) => {
-        console.log('[WS DEBUG] Backend disconnected:', data.reason);
-        this._emitLocal('backend_disconnected', data);
-      });
-
-      this.ws.on('connect_error', (error: any) => {
-        this._emitLocal('connect_error', error);
-      });
-
-      // Handle backend disconnection/reconnection (from Nuxt relay)
-      this.ws.on('backend_disconnected', (data: any) => {
-        this._emitLocal('backend_disconnected', data);
-      });
-
-      this.ws.on('backend_reconnected', () => {
-        this._emitLocal('backend_reconnected', {});
-      });
-
-      this.ws.on('backend_connect_error', (data: any) => {
-        this._emitLocal('backend_connect_error', data);
-      });
     });
   }
 
-  /**
-   * Emit an event to the server
-   * Note: Reserved events (connect, disconnect, error) cannot be emitted to server
-   */
   emit(event: string, data: any): void {
     if (this.ws && this.ws.connected) {
       this.ws.emit(event, data);
     }
   }
 
-  /**
-   * Emit an event to local handlers only (not to server)
-   * Used for system events like 'connect', 'disconnect', 'error'
-   */
   private _emitLocal(event: string, data: any): void {
     const eventHandlers = this.handlers.get(event);
     if (eventHandlers) {
