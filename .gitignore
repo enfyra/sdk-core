@@ -1,8 +1,43 @@
-node_modules
-dist
-*.log
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
 .env
 .env.local
-coverage
+.env.*.local
+
+# Testing
+coverage/
+*.lcov
+.nyc_output/
+
+# TypeScript
 *.tsbuildinfo
+
+# Cache
+.cache/
+.parcel-cache/
+*.cache

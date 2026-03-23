@@ -1,9 +1,9 @@
 import { $fetch } from 'ofetch';
+import type { FetchOptions } from 'ofetch';
 import { EnfyraError } from '../errors/EnfyraError';
 import type { HttpClientConfig, HttpRequestOptions, HttpResponse, EnfyraErrorCode, ResponseTransformer, ErrorTransformer } from '../types';
 
 export class HttpClient {
-  private baseUrl: string;
   private defaultHeaders: Record<string, string>;
   private timeout: number;
   private retries: number;
@@ -11,6 +11,8 @@ export class HttpClient {
   private onBeforeRequest?: () => Promise<void>;
   private responseTransformers: ResponseTransformer[] = [];
   private errorTransformers: ErrorTransformer[] = [];
+
+  public baseUrl: string;
 
   constructor(config: HttpClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
@@ -89,22 +91,24 @@ export class HttpClient {
     }
 
     const url = this.buildUrl(endpoint, query);
-    
+
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
     const headers = this.getHeaders(customHeaders, isFormData);
 
     let lastError: any = null;
     let attempts = 0;
 
+    const fetchOptions: FetchOptions<'json'> = {
+      method,
+      headers,
+      body,
+      timeout,
+      credentials: 'include',
+    };
+
     while (attempts <= this.retries) {
       try {
-        const fullResponse = await $fetch<any>(url, {
-          method,
-          headers,
-          body,
-          timeout,
-          credentials: 'include',
-        });
+        const fullResponse = await $fetch<any>(url, fetchOptions);
 
         const responseData = fullResponse.data || fullResponse;
         const meta = fullResponse.meta;
@@ -116,7 +120,6 @@ export class HttpClient {
           meta,
         };
 
-        // Apply response transformers
         for (const transformer of this.responseTransformers) {
           response = await transformer(response);
         }
@@ -171,7 +174,6 @@ export class HttpClient {
       details: error.data || error.response,
     });
 
-    // Apply error transformers
     for (const transformer of this.errorTransformers) {
       enfyraError = await transformer(enfyraError);
     }

@@ -1,4 +1,4 @@
-import { EnfyraErrorData, EnfyraErrorCode } from '../types';
+import type { EnfyraErrorData, EnfyraErrorCode } from '../types';
 
 export class EnfyraError extends Error {
   public readonly code: EnfyraErrorCode;

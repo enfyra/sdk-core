@@ -11,7 +11,7 @@ export class StorageManager {
   async upload(params: UploadFileParams) {
     const formData = new FormData();
     formData.append('file', params.file);
-    
+
     if (params.folder) {
       formData.append('folder', params.folder.toString());
     }
@@ -20,6 +20,9 @@ export class StorageManager {
     }
     if (params.description) {
       formData.append('description', params.description);
+    }
+    if (params.storageConfig) {
+      formData.append('storageConfig', params.storageConfig.toString());
     }
 
     const response = await this.client.post('/file_definition', formData, {
@@ -40,6 +43,17 @@ export class StorageManager {
 
   async getFolderTree() {
     const response = await this.client.get('/folder_definition/tree');
+    return response.data;
+  }
+
+  async getStorageConfigs() {
+    const response = await this.client.get('/storage_config_definition', {
+      query: {
+        fields: 'id,name,type,isEnabled',
+        filter: { isEnabled: { _eq: true } },
+        limit: 0
+      },
+    });
     return response.data;
   }
 }

@@ -218,7 +218,6 @@ export class AuthManager {
     if (!this.tokens) return null;
 
     if (this.isTokenExpiringSoon() || !this.isTokenValid()) {
-      // Deduplicate concurrent refresh requests
       if (!this.refreshPromise) {
         this.refreshPromise = this.refreshToken().finally(() => {
           this.refreshPromise = null;
@@ -255,13 +254,13 @@ export class AuthManager {
   setTokens(accessToken: string, refreshToken: string): void {
     const decoded = this.decodeToken(accessToken);
     let expTime: number;
-    
+
     if (decoded?.exp) {
       expTime = decoded.exp * 1000;
     } else {
       expTime = Date.now() + 15 * 60 * 1000;
     }
-    
+
     this.tokens = {
       accessToken,
       refreshToken,
@@ -270,5 +269,22 @@ export class AuthManager {
 
     this.setCookies(accessToken, refreshToken, expTime);
     this.http.setHeader('Authorization', `Bearer ${accessToken}`);
+  }
+
+  /**
+   * Generate OAuth redirect URL for the specified provider
+   * @param provider - OAuth provider ('google', 'facebook', or 'github')
+   * @param callbackUrl - URL to redirect after OAuth completes (your app's OAuth callback page)
+   * @returns Full OAuth authorization URL to redirect user's browser to
+   * @example
+   * const url = authManager.getOAuthRedirectUrl('google', 'https://myapp.com/oauth/callback');
+   * window.location.href = url;
+   */
+  getOAuthRedirectUrl(
+    provider: 'google' | 'facebook' | 'github',
+    callbackUrl: string
+  ): string {
+    const redirectParam = encodeURIComponent(callbackUrl);
+    return `${this.http.baseUrl}/auth/${provider}?redirect=${redirectParam}`;
   }
 }

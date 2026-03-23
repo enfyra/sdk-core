@@ -21,7 +21,7 @@ export interface HttpClientConfig {
   timeout?: number;
   retries?: number;
   retryDelay?: number;
-  cookiePath?: string; // Custom cookie path (default: '/')
+  cookiePath?: string;
 }
 
 export interface HttpRequestOptions {
@@ -92,6 +92,7 @@ export interface UploadFileParams {
   folder?: number;
   title?: string;
   description?: string;
+  storageConfig?: number | string;
 }
 
 export interface WebSocketConfig {
@@ -114,5 +115,5 @@ export interface ErrorTransformer {
   (error: any): any | Promise<any>;
 }
 
-// Auth types
-export { AuthTokens, LoginCredentials, UserInfo } from '../auth/AuthManager';
+
+export type { AuthTokens, LoginCredentials, UserInfo } from '../auth/AuthManager';

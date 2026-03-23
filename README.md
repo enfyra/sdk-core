@@ -159,11 +159,16 @@ client.from<T>('table_name')
 // Upload file
 await client.storage.upload({
   file: File | Blob,
-  folder?: number,
-  title?: string,
-  description?: string,
+  folder?: number,           // Folder ID (optional)
+  title?: string,            // File title (optional)
+  description?: string,      // File description (optional)
+  storageConfig?: number | string,  // Storage config ID (optional). If not provided, server uses default Local Storage
 });
+```
 
+**Note:** You need to create a storage configuration first (Local Storage or cloud storage like S3, GCS, R2) in the admin panel. If no `storageConfig` is specified, the server will use the default Local Storage.
+
+```typescript
 // Get download URL
 const url = client.storage.getDownloadUrl(fileId);
 
@@ -172,6 +177,9 @@ const blob = await client.storage.download(fileId);
 
 // Get folder tree
 const tree = await client.storage.getFolderTree();
+
+// Get storage configs
+const configs = await client.storage.getStorageConfigs();
 ```
 
 ##### WebSocket Client

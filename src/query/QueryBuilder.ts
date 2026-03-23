@@ -82,9 +82,15 @@ export class QueryBuilder<T = any> {
 
   async execute(): Promise<ExecuteResult<T>> {
     const query = this.buildQuery();
-    const endpoint = this.resourceId ? `/${this.table}/${this.resourceId}` : `/${this.table}`;
+
+    if (this.resourceId !== null) {
+      query.filter = JSON.stringify({ id: { _eq: this.resourceId } });
+      query.limit = 1;
+    }
+
+    const endpoint = `/${this.table}`;
     const response = await this.client.get<T | T[]>(endpoint, { query });
-    
+
     const result: ExecuteResult<T> = {
       data: response.data as T,
     };
@@ -108,17 +114,22 @@ export class QueryBuilder<T = any> {
     if (!this.resourceId) {
       throw new Error('ID is required for update. Use .byId() before .update()');
     }
-    
-    const response = await this.client.patch<T>(`/${this.table}/${this.resourceId}`, data);
-    
+
+    const response = await this.client.patch<T>(`/${this.table}`, {
+      ...data,
+      id: this.resourceId,
+    });
+
     return {
       data: response.data,
     };
   }
 
   async delete(): Promise<void> {
-    if (this.resourceId) {
-      await this.client.delete(`/${this.table}/${this.resourceId}`);
+    if (this.resourceId !== null) {
+      await this.client.delete(`/${this.table}`, {
+        query: { filter: JSON.stringify({ id: { _eq: this.resourceId } }) },
+      });
     } else {
       await this.client.delete(`/${this.table}`);
     }
