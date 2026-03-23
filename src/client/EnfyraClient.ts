@@ -13,10 +13,18 @@ export class EnfyraClient {
     this.http = new HttpClient(config);
     this.storage = new StorageManager(this.http);
     this.auth = new AuthManager(this.http);
-    
+
     this.http.setOnBeforeRequest(async () => {
       await this.auth.getToken();
     });
+  }
+
+  /**
+   * Get the underlying HttpClient instance
+   * Useful for advanced usage like WebSocket initialization
+   */
+  getHttpClient(): HttpClient {
+    return this.http;
   }
 
   from<T = any>(table: string): QueryBuilder<T> {

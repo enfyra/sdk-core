@@ -1,4 +1,4 @@
-# @enfyra/core
+# @enfyra/sdk-core
 
 Core API client for Enfyra - Pure JavaScript/TypeScript.
 
