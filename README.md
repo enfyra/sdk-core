@@ -1,6 +1,6 @@
 # @enfyra/sdk-core
 
-TypeScript client cho Enfyra. Chạy ở browser, Node.js, và edge. Không phụ thuộc framework.
+TypeScript client for Enfyra. Runs in browsers, Node.js, and edge runtimes. No framework dependency.
 
 ```bash
 yarn add @enfyra/sdk-core
@@ -16,18 +16,18 @@ const enfyra = new EnfyraClient({
 })
 ```
 
-`baseUrl` nhận absolute origin (`http://localhost:3000` → tự thêm `/api`) hoặc relative path (`/enfyra` → giữ nguyên, dùng khi proxy cùng origin).
+`baseUrl` accepts an absolute origin (`http://localhost:3000` → automatically appends `/api`) or a relative path (`/enfyra` → kept as-is, for same-origin proxy setups).
 
 ## Examples
 
-### Login và lấy user hiện tại
+### Login and get current user
 
 ```ts
 await enfyra.auth.login({ email: 'user@example.com', password: 'secret' })
 const me = await enfyra.auth.getMe()
 ```
 
-Token tự refresh khi gần hết hạn. Logout:
+Tokens refresh automatically when near expiry. Logout:
 
 ```ts
 await enfyra.auth.logout()
@@ -46,7 +46,7 @@ const { data, meta } = await enfyra
   .execute()
 ```
 
-### Tạo, sửa, xóa record
+### Create, update, delete records
 
 ```ts
 const created = await enfyra.from('articles').insert({ title: 'Hello' })
@@ -54,7 +54,7 @@ await enfyra.from('articles').byId(created.data.id).update({ title: 'Updated' })
 await enfyra.from('articles').byId(created.data.id).delete()
 ```
 
-### Gọi custom route
+### Call custom routes
 
 ```ts
 const { data } = await enfyra.get('/enfyra_user', {
@@ -64,7 +64,7 @@ const { data } = await enfyra.get('/enfyra_user', {
 await enfyra.post('/custom-route', { key: 'value' })
 ```
 
-### Dùng fetch tự do (vẫn auto inject auth)
+### Free-form fetch (auth auto-injected)
 
 ```ts
 const res = await enfyra.fetch('/custom-report', {
@@ -74,9 +74,9 @@ const res = await enfyra.fetch('/custom-report', {
 })
 ```
 
-URL ngoài Enfyra base sẽ không bị inject auth header.
+URLs outside the Enfyra base will not have auth headers injected.
 
-### Attach vào axios instance có sẵn
+### Attach to an existing axios instance
 
 ```ts
 import axios from 'axios'
@@ -87,9 +87,9 @@ enfyra.attachAxios(api)
 const { data } = await api.get('/api/me')
 ```
 
-Axios instance sẽ tự inject token và retry khi 401. Gọi `enfyra.dispose()` khi không dùng nữa.
+The axios instance will auto-inject tokens and retry on 401. Call `enfyra.dispose()` when tearing down.
 
-### Upload và download file
+### Upload and download files
 
 ```ts
 const file = await enfyra.storage.upload({ file: selectedFile, folder: folderId })
@@ -97,7 +97,7 @@ const blob = await enfyra.storage.download(file.id)
 const url = enfyra.storage.getDownloadUrl(file.id)
 ```
 
-### Realtime với Socket.IO
+### Realtime with Socket.IO
 
 ```ts
 import { WebSocketClient } from '@enfyra/sdk-core'
@@ -113,7 +113,7 @@ await socket.connect()
 socket.emit('message', { text: 'hello' })
 ```
 
-### Xử lý lỗi
+### Error handling
 
 ```ts
 import { isEnfyraError } from '@enfyra/sdk-core'
@@ -139,4 +139,4 @@ const tokens = await enfyra.auth.exchangeApiToken(process.env.ENFYRA_PAT!)
 yarn workspace @enfyra/sdk-core dev:playground
 ```
 
-Mở `http://localhost:3001`.
+Opens at `http://localhost:3001`.
