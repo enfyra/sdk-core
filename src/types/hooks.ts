@@ -1,4 +1,3 @@
-import type { EnfyraError } from '../errors/EnfyraError';
 import type { FilterObject } from './query';
 
 export type RequestStatus = 'pending' | 'success' | 'error';
@@ -19,7 +18,7 @@ export type MutationOperation = 'insert' | 'update' | 'delete';
 export interface MutationOptions {
   operation?: MutationOperation;
   onSuccess?: (data: unknown) => void;
-  onError?: (error: EnfyraError) => void;
+  onError?: (error: Error) => void;
   onSettled?: () => void;
 }
 
