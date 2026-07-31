@@ -5,6 +5,7 @@ import type { ExecuteResult, FilterObject, QueryConfig } from '../types';
 export class QueryBuilder<T = unknown> {
   private readonly config: QueryConfig = {};
   private resourceId: number | string | null = null;
+  private transformFn: ((data: T | T[]) => T | T[]) | null = null;
 
   constructor(
     private readonly client: HttpClient,
@@ -51,6 +52,11 @@ export class QueryBuilder<T = unknown> {
     return this;
   }
 
+  transform(fn: (data: T | T[]) => T | T[]): this {
+    this.transformFn = fn;
+    return this;
+  }
+
   async execute(): Promise<ExecuteResult<T>> {
     const query = this.buildQuery();
     if (this.resourceId !== null) {
@@ -66,8 +72,9 @@ export class QueryBuilder<T = unknown> {
     const response = await this.client.get<T | T[]>(`/${this.table}`, {
       query,
     });
+    const data = this.transformFn ? this.transformFn(response.data) : response.data;
     return {
-      data: response.data,
+      data,
       ...(response.meta ? { meta: response.meta } : {}),
     };
   }

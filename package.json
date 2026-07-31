@@ -1,6 +1,6 @@
 {
   "name": "@enfyra/sdk-core",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Core API client for Enfyra",
   "type": "module",
   "packageManager": "yarn@4.17.0",

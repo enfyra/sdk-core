@@ -30,6 +30,8 @@ export interface HttpClientConfig {
   timeout?: number;
   retries?: number;
   retryDelay?: number;
+  onResponse?: ResponseTransformer | ResponseTransformer[];
+  onError?: ErrorTransformer | ErrorTransformer[];
 }
 
 export interface EnfyraClientConfig extends HttpClientConfig {
@@ -50,6 +52,7 @@ export interface HttpRequestOptions {
   auth?: boolean;
   retryUnsafe?: boolean;
   redirect?: RequestRedirect;
+  transform?: ResponseTransformer;
 }
 
 export interface HttpResponse<T = unknown> {

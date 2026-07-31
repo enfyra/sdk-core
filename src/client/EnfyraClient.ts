@@ -13,6 +13,8 @@ import type {
   EnfyraClientConfig,
   HttpRequestOptions,
   HttpResponse,
+  ResponseTransformer,
+  ErrorTransformer,
 } from '../types';
 
 type AxiosAttachment = {
@@ -50,6 +52,14 @@ export class EnfyraClient {
 
   getHttpClient(): HttpClient {
     return this.http;
+  }
+
+  onResponse(transformer: ResponseTransformer): void {
+    this.http.onResponse(transformer);
+  }
+
+  onError(transformer: ErrorTransformer): void {
+    this.http.onError(transformer);
   }
 
   from<T = unknown>(table: string): QueryBuilder<T> {

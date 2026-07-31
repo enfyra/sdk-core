@@ -62,6 +62,19 @@ export class HttpClient {
     this.timeout = config.timeout ?? 30_000;
     this.retries = config.retries ?? 0;
     this.retryDelay = config.retryDelay ?? 1_000;
+
+    if (config.onResponse) {
+      const transformers = Array.isArray(config.onResponse)
+        ? config.onResponse
+        : [config.onResponse];
+      this.responseTransformers.push(...transformers);
+    }
+    if (config.onError) {
+      const transformers = Array.isArray(config.onError)
+        ? config.onError
+        : [config.onError];
+      this.errorTransformers.push(...transformers);
+    }
   }
 
   setOnBeforeRequest(callback: BeforeRequestHook): void {
@@ -157,6 +170,9 @@ export class HttpClient {
         let transformed: HttpResponse<T> = response;
         for (const transformer of this.responseTransformers) {
           transformed = (await transformer(transformed)) as HttpResponse<T>;
+        }
+        if (options.transform) {
+          transformed = (await options.transform(transformed)) as HttpResponse<T>;
         }
         return transformed;
       } catch (error) {
