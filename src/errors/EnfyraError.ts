@@ -3,7 +3,7 @@ import type { EnfyraErrorData, EnfyraErrorCode } from '../types';
 export class EnfyraError extends Error {
   public readonly code: EnfyraErrorCode;
   public readonly statusCode?: number;
-  public readonly details?: Record<string, any>;
+  public readonly details?: unknown;
 
   constructor({ code, message, statusCode, details }: EnfyraErrorData) {
     super(message);

@@ -1,172 +1,107 @@
-import { HttpClient } from '../client/HttpClient';
 import { EnfyraError } from '../errors/EnfyraError';
+import type { HttpClient } from '../client/HttpClient';
+import type {
+  AuthConfig,
+  AuthEndpoints,
+  AuthLoginResult,
+  AuthTokens,
+  LoginCredentials,
+  OAuthProvider,
+  UserInfo,
+} from '../types';
 
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expTime: number;
-}
+const COOKIE_ENDPOINTS: AuthEndpoints = {
+  login: '/login',
+  logout: '/logout',
+  refresh: '/auth/refresh-token',
+  me: '/me',
+  apiTokenExchange: '/auth/token/exchange',
+  oauthExchange: '/auth/oauth/exchange',
+  oauthProviders: '/auth/providers',
+};
 
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-export interface UserInfo {
-  id: string;
-  email: string;
-  name: string;
-  [key: string]: any;
-}
+const TOKEN_ENDPOINTS: AuthEndpoints = {
+  ...COOKIE_ENDPOINTS,
+  login: '/auth/login',
+  logout: '/auth/logout',
+};
 
 export class AuthManager {
-  private http: HttpClient;
+  private readonly config: AuthConfig;
+  private readonly endpoints: AuthEndpoints;
   private tokens: AuthTokens | null = null;
-  private refreshThreshold: number = 2 * 60 * 1000;
   private refreshPromise: Promise<AuthTokens> | null = null;
 
-  constructor(http: HttpClient) {
-    this.http = http;
-    this.loadTokens();
-  }
-
-  private decodeToken(token: string): { exp?: number; iat?: number } | null {
-    try {
-      const base64Url = token.split('.')[1];
-      if (!base64Url) return null;
-      
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64).split('').map(c => 
-          '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-        ).join('')
-      );
-      return JSON.parse(jsonPayload);
-    } catch {
-      return null;
+  constructor(
+    private readonly http: HttpClient,
+    config: AuthConfig = { strategy: 'token' },
+  ) {
+    this.config = config;
+    this.endpoints = {
+      ...(config.strategy === 'token' ? TOKEN_ENDPOINTS : COOKIE_ENDPOINTS),
+      ...('endpoints' in config ? config.endpoints : undefined),
+    };
+    if (config.strategy === 'token' && config.initialTokens) {
+      this.tokens = config.initialTokens;
     }
   }
 
-  private loadTokens(): void {
-    if (typeof document === 'undefined') return;
-
-    const cookies = document.cookie.split(';').reduce((acc: Record<string, string>, cookie: string) => {
-      const separatorIndex = cookie.trim().indexOf('=');
-      if (separatorIndex === -1) return acc;
-      const key = cookie.trim().substring(0, separatorIndex);
-      const value = cookie.trim().substring(separatorIndex + 1);
-      acc[key] = decodeURIComponent(value);
-      return acc;
-    }, {});
-
-    const { accessToken, refreshToken, expTime } = cookies;
-
-    if (accessToken && refreshToken && expTime) {
-      this.tokens = {
-        accessToken,
-        refreshToken,
-        expTime: parseInt(expTime),
-      };
-
-      this.http.setHeader('Authorization', `Bearer ${accessToken}`);
-    }
+  get strategy(): AuthConfig['strategy'] {
+    return this.config.strategy;
   }
 
-  private clearTokens(): void {
-    this.tokens = null;
-  }
-
-  private setCookies(accessToken: string, refreshToken: string, expTime: number): void {
-    if (typeof document === 'undefined') return;
-
-    const maxAge = Math.max(0, Math.floor((expTime - Date.now()) / 1000));
-    const expires = new Date(expTime).toUTCString();
-    const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    const secureAttr = isSecure ? '; Secure' : '';
-
-    const encodedAccessToken = encodeURIComponent(accessToken);
-    const encodedRefreshToken = encodeURIComponent(refreshToken);
-
-    document.cookie = `accessToken=${encodedAccessToken}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Strict${secureAttr}`;
-    document.cookie = `refreshToken=${encodedRefreshToken}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Strict${secureAttr}`;
-    document.cookie = `expTime=${expTime}; path=/; max-age=${maxAge}; expires=${expires}; SameSite=Strict${secureAttr}`;
-  }
-
-  private clearCookies(): void {
-    if (typeof document === 'undefined') return;
-
-    const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    const secureAttr = isSecure ? '; Secure' : '';
-
-    document.cookie = `accessToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict${secureAttr}`;
-    document.cookie = `refreshToken=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict${secureAttr}`;
-    document.cookie = `expTime=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict${secureAttr}`;
-
-    this.http.removeHeader('Authorization');
-  }
-
-  private isTokenExpiringSoon(): boolean {
-    if (!this.tokens) return false;
-    const now = Date.now();
-    return this.tokens.expTime - now < this.refreshThreshold;
-  }
-
-  private isTokenValid(): boolean {
-    if (!this.tokens) return false;
-    const now = Date.now();
-    return this.tokens.expTime > now;
-  }
-
-  async login(credentials: LoginCredentials): Promise<AuthTokens> {
-    try {
-      const response = await this.http.post<AuthTokens>('/auth/login', credentials);
-      
-      const { accessToken, refreshToken } = response.data;
-      
-      const decoded = this.decodeToken(accessToken);
-      let expTime: number;
-      
-      if (decoded?.exp) {
-        expTime = decoded.exp * 1000;
-      } else {
-        expTime = Date.now() + 15 * 60 * 1000;
-      }
-      
-      this.tokens = {
-        accessToken,
-        refreshToken,
-        expTime,
-      };
-
-      this.setCookies(accessToken, refreshToken, expTime);
-      this.http.setHeader('Authorization', `Bearer ${accessToken}`);
-
-      return this.tokens;
-    } catch (error: any) {
+  async login(credentials: LoginCredentials): Promise<AuthLoginResult> {
+    if (this.config.strategy === 'none') {
       throw new EnfyraError({
-        code: 'UNAUTHORIZED',
-        message: 'Login failed. Please check your credentials.',
-        statusCode: 401,
-        details: error?.data || error,
+        code: 'VALIDATION_ERROR',
+        message: 'Login is not supported with the none strategy',
       });
     }
+
+    const response = await this.http.post<AuthTokens>(
+      this.endpoints.login,
+      credentials,
+      { auth: false },
+    );
+
+    if (this.config.strategy !== 'token') {
+      return { strategy: 'cookie', authenticated: true };
+    }
+
+    const tokens = this.normalizeTokens(response.data);
+    this.persistTokens(tokens);
+    return { strategy: 'token', tokens };
   }
 
   async logout(): Promise<void> {
+    if (this.config.strategy === 'cookie') {
+      await this.http.post(this.endpoints.logout, undefined, { auth: false });
+      return;
+    }
+    if (this.config.strategy !== 'token') return;
+
     try {
       if (this.tokens?.refreshToken) {
-        await this.http.post('/auth/logout', {
-          refreshToken: this.tokens.refreshToken
+        await this.http.post(this.endpoints.logout, {
+          refreshToken: this.tokens.refreshToken,
         });
       }
-    } catch {
     } finally {
       this.clearTokens();
-      this.clearCookies();
     }
   }
 
-  async refreshToken(): Promise<AuthTokens> {
+  refreshToken(): Promise<AuthTokens> {
+    this.requireTokenStrategy('Token refresh');
+    if (!this.refreshPromise) {
+      this.refreshPromise = this.performRefreshToken().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+    return this.refreshPromise;
+  }
+
+  private async performRefreshToken(): Promise<AuthTokens> {
     if (!this.tokens?.refreshToken) {
       throw new EnfyraError({
         code: 'UNAUTHORIZED',
@@ -176,115 +111,200 @@ export class AuthManager {
     }
 
     try {
-      const response = await this.http.post<AuthTokens>('/auth/refresh-token', {
-        refreshToken: this.tokens.refreshToken,
-      });
-      
-      const { accessToken, refreshToken } = response.data;
-      
-      const decoded = this.decodeToken(accessToken);
-      let expTime: number;
-      
-      if (decoded?.exp) {
-        expTime = decoded.exp * 1000;
-      } else {
-        expTime = Date.now() + 15 * 60 * 1000;
+      const response = await this.http.post<AuthTokens>(
+        this.endpoints.refresh,
+        { refreshToken: this.tokens.refreshToken },
+        { auth: false },
+      );
+      const tokens = this.normalizeTokens(
+        response.data,
+        this.tokens.refreshToken,
+      );
+      this.persistTokens(tokens);
+      return tokens;
+    } catch (error) {
+      if (
+        error instanceof EnfyraError &&
+        (error.statusCode === 400 || error.statusCode === 401)
+      ) {
+        this.clearTokens();
       }
-      
-      this.tokens = {
-        accessToken,
-        refreshToken: refreshToken || this.tokens.refreshToken,
-        expTime,
-      };
-
-      this.setCookies(accessToken, refreshToken || this.tokens.refreshToken, expTime);
-      this.http.setHeader('Authorization', `Bearer ${accessToken}`);
-
-      return this.tokens;
-    } catch (error: any) {
-      this.clearTokens();
-      this.clearCookies();
-
-      throw new EnfyraError({
-        code: 'UNAUTHORIZED',
-        message: 'Token refresh failed. Please login again.',
-        statusCode: 401,
-        details: error?.data || error,
-      });
+      throw error;
     }
+  }
+
+  async exchangeApiToken(apiToken: string): Promise<AuthTokens> {
+    this.requireTokenStrategy('API-token exchange');
+    const response = await this.http.post<AuthTokens>(
+      this.endpoints.apiTokenExchange,
+      { apiToken },
+      { auth: false },
+    );
+    const tokens = this.normalizeTokens(response.data);
+    this.persistTokens(tokens);
+    return tokens;
+  }
+
+  async exchangeOAuthCode(code: string): Promise<AuthTokens> {
+    this.requireTokenStrategy('OAuth-code exchange');
+    const response = await this.http.post<AuthTokens>(
+      this.endpoints.oauthExchange,
+      { code },
+      { auth: false },
+    );
+    const tokens = this.normalizeTokens(response.data);
+    this.persistTokens(tokens);
+    return tokens;
   }
 
   async getToken(): Promise<string | null> {
+    if (this.config.strategy !== 'token') return null;
     if (!this.tokens) return null;
 
-    if (this.isTokenExpiringSoon() || !this.isTokenValid()) {
-      if (!this.refreshPromise) {
-        this.refreshPromise = this.refreshToken().finally(() => {
-          this.refreshPromise = null;
-        });
+    if (this.tokens.expTime <= Date.now()) {
+      if (!this.tokens.refreshToken) {
+        this.clearTokens();
+        return null;
       }
-      await this.refreshPromise;
+      return (await this.refreshToken()).accessToken;
     }
 
-    return this.tokens?.accessToken || null;
+    const threshold = this.config.refreshThreshold ?? 120_000;
+    if (
+      this.tokens.refreshToken &&
+      this.tokens.expTime - Date.now() < threshold
+    ) {
+      return (await this.refreshToken()).accessToken;
+    }
+
+    return this.tokens.accessToken;
   }
 
   isAuthenticated(): boolean {
-    if (!this.tokens) return false;
-    
-    const now = Date.now();
-    const timeUntilExpiry = this.tokens.expTime - now;
-    
-    return timeUntilExpiry > 60 * 1000;
+    return Boolean(this.tokens && this.tokens.expTime > Date.now());
   }
 
-  async getMe(): Promise<UserInfo> {
-    try {
-      const response = await this.http.get<UserInfo>('/me');
-      return response.data;
-    } catch (error: any) {
-      throw error;
-    }
+  async getMe(): Promise<UserInfo | null> {
+    const response = await this.http.get<UserInfo | UserInfo[]>(this.endpoints.me);
+    if (Array.isArray(response.data)) return response.data[0] ?? null;
+    return response.data;
   }
 
   getTokens(): AuthTokens | null {
     return this.tokens;
   }
 
-  setTokens(accessToken: string, refreshToken: string): void {
-    const decoded = this.decodeToken(accessToken);
-    let expTime: number;
-
-    if (decoded?.exp) {
-      expTime = decoded.exp * 1000;
-    } else {
-      expTime = Date.now() + 15 * 60 * 1000;
-    }
-
-    this.tokens = {
-      accessToken,
-      refreshToken,
-      expTime,
-    };
-
-    this.setCookies(accessToken, refreshToken, expTime);
-    this.http.setHeader('Authorization', `Bearer ${accessToken}`);
+  async setTokens(tokens: AuthTokens): Promise<void>;
+  async setTokens(
+    accessToken: string,
+    refreshToken?: string,
+    expTime?: number,
+  ): Promise<void>;
+  async setTokens(
+    tokensOrAccessToken: AuthTokens | string,
+    refreshToken?: string,
+    expTime?: number,
+  ): Promise<void> {
+    this.requireTokenStrategy('Setting tokens');
+    const tokens =
+      typeof tokensOrAccessToken === 'string'
+        ? this.normalizeTokens({
+            accessToken: tokensOrAccessToken,
+            refreshToken,
+            expTime: expTime ?? this.getTokenExpiry(tokensOrAccessToken),
+          })
+        : this.normalizeTokens(tokensOrAccessToken);
+    this.persistTokens(tokens);
   }
 
-  /**
-   * Generate OAuth redirect URL for the specified provider
-   * @param provider - OAuth provider ('google', 'facebook', or 'github')
-   * @param callbackUrl - URL to redirect after OAuth completes (your app's OAuth callback page)
-   * @returns Full OAuth authorization URL to redirect user's browser to
-   * @example
-   * const url = authManager.getOAuthRedirectUrl('google', 'https://myapp.com/oauth/callback');
-   * window.location.href = url;
-   */
-  getOAuthRedirectUrl(
-    provider: 'google' | 'facebook' | 'github',
-    callbackUrl: string
-  ): string {
-    const redirectParam = encodeURIComponent(callbackUrl);
-    return `${this.http.baseUrl}/auth/${provider}?redirect=${redirectParam}`;
+  getOAuthRedirectUrl(provider: OAuthProvider, callbackUrl: string): string {
+    if (this.config.strategy !== 'cookie') {
+      throw new EnfyraError({
+        code: 'VALIDATION_ERROR',
+        message: 'OAuth redirects require the cookie bridge strategy',
+      });
+    }
+    const params = new URLSearchParams({ redirect: callbackUrl });
+    if (this.config.cookieBridgePrefix) {
+      params.set(
+        'cookieBridgePrefix',
+        this.normalizeBridgePrefix(this.config.cookieBridgePrefix),
+      );
+    }
+    return `${this.http.resolveUrl(`/auth/${provider}`)}?${params.toString()}`;
+  }
+
+  async getOAuthProviders(): Promise<OAuthProvider[]> {
+    const response = await this.http.get<Array<{ provider: OAuthProvider }>>(
+      this.endpoints.oauthProviders,
+      { auth: false },
+    );
+    return response.data.map(({ provider }) => provider);
+  }
+
+  private persistTokens(tokens: AuthTokens): void {
+    this.tokens = tokens;
+  }
+
+  private clearTokens(): void {
+    this.tokens = null;
+    this.http.removeHeader('Authorization');
+  }
+
+  private normalizeTokens(
+    tokens: AuthTokens,
+    fallbackRefreshToken?: string,
+  ): AuthTokens {
+    if (!tokens?.accessToken) {
+      throw new EnfyraError({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication response did not include an access token',
+      });
+    }
+    return {
+      ...tokens,
+      refreshToken: tokens.refreshToken ?? fallbackRefreshToken,
+      expTime: tokens.expTime ?? this.getTokenExpiry(tokens.accessToken),
+    };
+  }
+
+  private getTokenExpiry(token: string): number {
+    try {
+      const payload = token.split('.')[1];
+      if (!payload) return Date.now() + 15 * 60_000;
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded =
+        typeof Buffer !== 'undefined'
+          ? Buffer.from(normalized, 'base64').toString('utf8')
+          : decodeURIComponent(
+              atob(normalized)
+                .split('')
+                .map(
+                  (character) =>
+                    `%${character.charCodeAt(0).toString(16).padStart(2, '0')}`,
+                )
+                .join(''),
+            );
+      const parsed = JSON.parse(decoded) as { exp?: number };
+      return typeof parsed.exp === 'number'
+        ? parsed.exp * 1_000
+        : Date.now() + 15 * 60_000;
+    } catch {
+      return Date.now() + 15 * 60_000;
+    }
+  }
+
+  private requireTokenStrategy(operation: string): void {
+    if (this.config.strategy !== 'token') {
+      throw new EnfyraError({
+        code: 'VALIDATION_ERROR',
+        message: `${operation} requires the token strategy`,
+      });
+    }
+  }
+
+  private normalizeBridgePrefix(prefix: string): string {
+    const normalized = `/${prefix}`.replace(/\/{2,}/g, '/').replace(/\/$/, '');
+    return normalized || '/';
   }
 }

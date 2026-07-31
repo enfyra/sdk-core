@@ -5,7 +5,7 @@ export default defineConfig({
   root: fileURLToPath(new URL('./playground', import.meta.url)),
   resolve: {
     alias: {
-      '@enfyra/core': fileURLToPath(new URL('./dist/index.mjs', import.meta.url)),
+      '@enfyra/sdk-core': fileURLToPath(new URL('./dist/index.mjs', import.meta.url)),
     },
   },
   server: {
