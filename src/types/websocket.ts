@@ -1,3 +1,5 @@
+export type WebSocketTransport = 'polling' | 'websocket';
+
 export interface WebSocketConfig {
   baseUrl?: string;
   gateway: string;
@@ -9,6 +11,9 @@ export interface WebSocketConfig {
   reconnect?: boolean;
   maxReconnectAttempts?: number;
   reconnectInterval?: number;
+  reconnectDelayMax?: number;
+  transports?: WebSocketTransport[];
+  upgrade?: boolean;
 }
 
 export type WebSocketEvent = 'connect' | 'disconnect' | 'connect_error' | 'error' | (string & {});

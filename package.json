@@ -1,7 +1,8 @@
 {
   "name": "@enfyra/sdk-core",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Core API client for Enfyra",
+  "license": "MIT",
   "type": "module",
   "packageManager": "yarn@4.17.0",
   "engines": {

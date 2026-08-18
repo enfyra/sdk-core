@@ -19,6 +19,9 @@ export class WebSocketClient {
       | 'reconnect'
       | 'maxReconnectAttempts'
       | 'reconnectInterval'
+      | 'reconnectDelayMax'
+      | 'transports'
+      | 'upgrade'
     >
   > &
     WebSocketConfig;
@@ -30,7 +33,10 @@ export class WebSocketClient {
       withCredentials: true,
       reconnect: true,
       maxReconnectAttempts: 5,
-      reconnectInterval: 1_000,
+      reconnectInterval: 2_000,
+      reconnectDelayMax: 30_000,
+      transports: ['polling'],
+      upgrade: false,
       ...config,
     };
   }
@@ -82,6 +88,9 @@ export class WebSocketClient {
       reconnection: this.config.reconnect,
       reconnectionAttempts: this.config.maxReconnectAttempts,
       reconnectionDelay: this.config.reconnectInterval,
+      reconnectionDelayMax: this.config.reconnectDelayMax,
+      transports: this.config.transports,
+      upgrade: this.config.upgrade,
     });
     for (const [event, handlers] of this.listeners) {
       for (const handler of handlers) this.ws.on(event, handler);

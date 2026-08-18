@@ -40,8 +40,37 @@ describe('WebSocketClient', () => {
       withCredentials: true,
       reconnection: true,
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 30000,
+      transports: ['polling'],
+      upgrade: false,
     });
     expect(mocks.socket.on).toHaveBeenCalledWith('connect', onConnect);
+  });
+
+  it('allows callers to override the stable transport defaults', async () => {
+    const client = new WebSocketClient({
+      baseUrl: 'https://app.example',
+      gateway: 'chat',
+      maxReconnectAttempts: 3,
+      reconnectInterval: 500,
+      reconnectDelayMax: 5_000,
+      transports: ['websocket'],
+      upgrade: true,
+    });
+
+    await client.connect();
+
+    expect(mocks.io).toHaveBeenCalledWith('https://app.example/chat', {
+      path: '/socket.io',
+      auth: undefined,
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5_000,
+      transports: ['websocket'],
+      upgrade: true,
+    });
   });
 });
