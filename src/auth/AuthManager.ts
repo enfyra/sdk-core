@@ -6,6 +6,7 @@ import type {
   AuthLoginResult,
   AuthTokens,
   LoginCredentials,
+  OAuthRedirectOptions,
   OAuthProvider,
   UserInfo,
 } from '../types';
@@ -25,6 +26,8 @@ const TOKEN_ENDPOINTS: AuthEndpoints = {
   login: '/auth/login',
   logout: '/auth/logout',
 };
+
+const MAX_OAUTH_STATE_LENGTH = 4096;
 
 export class AuthManager {
   private readonly config: AuthConfig;
@@ -217,7 +220,11 @@ export class AuthManager {
     this.persistTokens(tokens);
   }
 
-  getOAuthRedirectUrl(provider: OAuthProvider, callbackUrl: string): string {
+  getOAuthRedirectUrl(
+    provider: OAuthProvider,
+    callbackUrl: string,
+    options?: OAuthRedirectOptions,
+  ): string {
     if (this.config.strategy !== 'cookie') {
       throw new EnfyraError({
         code: 'VALIDATION_ERROR',
@@ -225,6 +232,18 @@ export class AuthManager {
       });
     }
     const params = new URLSearchParams({ redirect: callbackUrl });
+    if (options?.state !== undefined) {
+      if (
+        typeof options.state !== 'string' ||
+        options.state.length > MAX_OAUTH_STATE_LENGTH
+      ) {
+        throw new EnfyraError({
+          code: 'VALIDATION_ERROR',
+          message: 'OAuth state must be a string no longer than 4096 characters',
+        });
+      }
+      params.set('state', options.state);
+    }
     if (this.config.cookieBridgePrefix) {
       params.set(
         'cookieBridgePrefix',

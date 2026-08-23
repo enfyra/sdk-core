@@ -64,6 +64,13 @@ describe('AuthManager', () => {
     expect(auth.getOAuthRedirectUrl('google', 'https://site.example/callback')).toBe(
       'https://app.example/enfyra/auth/google?redirect=https%3A%2F%2Fsite.example%2Fcallback&cookieBridgePrefix=%2Fenfyra',
     );
+    expect(
+      auth.getOAuthRedirectUrl('google', 'https://site.example/callback', {
+        state: 'opaque-state+/=',
+      }),
+    ).toBe(
+      'https://app.example/enfyra/auth/google?redirect=https%3A%2F%2Fsite.example%2Fcallback&state=opaque-state%2B%2F%3D&cookieBridgePrefix=%2Fenfyra',
+    );
   });
 
   it('refreshes direct tokens once without re-entering auth', async () => {

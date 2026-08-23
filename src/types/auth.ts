@@ -13,6 +13,10 @@ export interface LoginCredentials {
   remember?: boolean;
 }
 
+export interface OAuthRedirectOptions {
+  state?: string;
+}
+
 export interface UserInfo {
   id: string;
   email: string;
