@@ -23,7 +23,8 @@ export function normalizeEnfyraBaseUrl(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) throw new TypeError('baseUrl is required');
   if (trimmed === '/') return '/api';
-  if (!/^https?:\/\//i.test(trimmed)) return trimmed.replace(/[?#].*$/, '').replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(trimmed))
+    return trimmed.replace(/[?#].*$/, '').replace(/\/+$/, '');
 
   const url = new URL(trimmed);
   url.search = '';
@@ -99,9 +100,13 @@ export class HttpClient {
 
   resolveUrl(endpoint: string, query?: Record<string, unknown>): string {
     const cleanEndpoint = endpoint.replace(/^\/+/, '');
-    const path = cleanEndpoint ? `${this.baseUrl}/${cleanEndpoint}` : this.baseUrl;
+    const path = cleanEndpoint
+      ? `${this.baseUrl}/${cleanEndpoint}`
+      : this.baseUrl;
     const queryString = this.buildQueryString(query);
-    return queryString ? `${path}${path.includes('?') ? '&' : '?'}${queryString}` : path;
+    return queryString
+      ? `${path}${path.includes('?') ? '&' : '?'}${queryString}`
+      : path;
   }
 
   async fetch(
@@ -137,9 +142,13 @@ export class HttpClient {
 
   isEnfyraUrl(input: RequestInfo | URL): boolean {
     const value = this.getInputUrl(input);
-    if (!this.isAbsoluteUrl(value)) return true;
-
     const base = this.toComparableUrl(this.baseUrl);
+    if (
+      !this.isAbsoluteUrl(this.baseUrl) &&
+      this.isAbsoluteUrl(value) &&
+      typeof globalThis.location === 'undefined'
+    )
+      return false;
     const target = this.toComparableUrl(value);
     if (!base || !target || base.origin !== target.origin) return false;
 
@@ -155,7 +164,11 @@ export class HttpClient {
     options: HttpRequestOptions = {},
   ): Promise<HttpResponse<T>> {
     const method = options.method ?? 'GET';
-    if (options.auth !== false && this.onBeforeRequest) {
+    if (
+      this.isEnfyraUrl(this.resolveUrl(endpoint, options.query)) &&
+      options.auth !== false &&
+      this.onBeforeRequest
+    ) {
       await this.onBeforeRequest();
     }
 
@@ -172,7 +185,9 @@ export class HttpClient {
           transformed = (await transformer(transformed)) as HttpResponse<T>;
         }
         if (options.transform) {
-          transformed = (await options.transform(transformed)) as HttpResponse<T>;
+          transformed = (await options.transform(
+            transformed,
+          )) as HttpResponse<T>;
         }
         return transformed;
       } catch (error) {
@@ -190,7 +205,11 @@ export class HttpClient {
     options: HttpRequestOptions,
     method: NonNullable<HttpRequestOptions['method']>,
   ): Promise<HttpResponse<T>> {
-    const headers = await this.buildHeaders(options.headers);
+    const url = this.resolveUrl(endpoint, options.query);
+    const inScope = this.isEnfyraUrl(url);
+    const headers = inScope
+      ? await this.buildHeaders(options.headers)
+      : new Headers(options.headers);
     const body = this.buildBody(options.body, headers);
     const controller = new AbortController();
     const timeout = options.timeout ?? this.timeout;
@@ -207,16 +226,23 @@ export class HttpClient {
     }
 
     try {
-      const response = await this.fetchImpl(this.resolveUrl(endpoint, options.query), {
+      const response = await this.fetchImpl(url, {
         method,
         headers,
         body,
-        credentials: options.credentials ?? this.credentials,
+        ...(options.credentials
+          ? { credentials: options.credentials }
+          : inScope
+            ? { credentials: this.credentials }
+            : {}),
         redirect: options.redirect,
         signal: controller.signal,
       });
-      await this.onRawResponse?.(response);
-      const data = await this.parseResponse(response, options.responseType);
+      if (inScope) await this.onRawResponse?.(response);
+      const data = await this.parseResponse(
+        response,
+        response.ok ? options.responseType : undefined,
+      );
       if (!response.ok) {
         throw {
           data,
@@ -225,7 +251,8 @@ export class HttpClient {
         } satisfies RequestFailure;
       }
 
-      const envelope = data as { data?: T; meta?: HttpResponse<T>['meta'] } | undefined;
+      const envelope = data as
+        { data?: T; meta?: HttpResponse<T>['meta'] } | undefined;
       const responseData =
         envelope && Object.prototype.hasOwnProperty.call(envelope, 'data')
           ? envelope.data
@@ -263,6 +290,11 @@ export class HttpClient {
     return headers;
   }
 
+  resolveFetchUrl(input: RequestInfo | URL): string {
+    const value = this.getInputUrl(input);
+    return this.isAbsoluteUrl(value) ? value : this.resolveUrl(value);
+  }
+
   private resolveFetchInput(input: RequestInfo | URL): {
     input: RequestInfo | URL;
     url: string;
@@ -296,10 +328,12 @@ export class HttpClient {
             : undefined;
         return new URL(value, base);
       }
-      if (typeof globalThis.location !== 'undefined') {
-        return new URL(value, globalThis.location.origin);
-      }
-      return null;
+      return new URL(
+        value,
+        typeof globalThis.location !== 'undefined'
+          ? globalThis.location.origin
+          : 'https://enfyra.invalid',
+      );
     } catch {
       return null;
     }
@@ -308,7 +342,8 @@ export class HttpClient {
   private buildBody(body: unknown, headers: Headers): BodyInit | undefined {
     if (body === undefined || body === null) return undefined;
     if (this.isBodyInit(body)) return body;
-    if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+    if (!headers.has('content-type'))
+      headers.set('content-type', 'application/json');
     return JSON.stringify(body);
   }
 
@@ -393,7 +428,8 @@ export class HttpClient {
       | undefined;
     const payload = data?.error ?? data;
     const statusCode = error.statusCode;
-    let code: EnfyraErrorCode = payload?.code ?? this.mapErrorCode(statusCode, error);
+    let code: EnfyraErrorCode =
+      payload?.code ?? this.mapErrorCode(statusCode, error);
     let enfyraError = new EnfyraError({
       code,
       message: payload?.message || error.message || 'Request failed',

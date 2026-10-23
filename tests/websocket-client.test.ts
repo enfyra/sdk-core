@@ -21,6 +21,17 @@ describe('WebSocketClient', () => {
     mocks.io.mockReturnValue(mocks.socket);
   });
 
+  it('cancels a pending lazy connection on disconnect and permits a fresh connect', async () => {
+    const client = new WebSocketClient({ gateway: 'chat' });
+    const pending = client.connect();
+    client.disconnect();
+    await pending;
+    expect(mocks.io).not.toHaveBeenCalled();
+    await client.connect();
+    expect(mocks.io).toHaveBeenCalledTimes(1);
+    client.disconnect();
+  });
+
   it('retains listeners registered before async connection setup', async () => {
     const onConnect = vi.fn();
     const client = new WebSocketClient({

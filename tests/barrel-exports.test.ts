@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AuthManager,
+  createTokenPersistence,
   EnfyraClient,
   EnfyraError,
   HttpClient,
@@ -32,6 +33,7 @@ describe('barrel exports', () => {
     expect(EnfyraClient).toBeTypeOf('function');
     expect(HttpClient).toBeTypeOf('function');
     expect(AuthManager).toBeTypeOf('function');
+    expect(createTokenPersistence).toBeTypeOf('function');
     expect(QueryBuilder).toBeTypeOf('function');
     expect(StorageManager).toBeTypeOf('function');
     expect(WebSocketClient).toBeTypeOf('function');
@@ -49,7 +51,12 @@ describe('barrel exports', () => {
     const upload: UploadFileParams = { file: new Blob() };
     const file: FileRecord = { id: 1, name: 'f.txt' };
     const folder: FolderNode = { id: 1, name: 'root' };
-    const storageCfg: StorageConfigRecord = { id: 1, name: 's3', type: 's3', isEnabled: true };
+    const storageCfg: StorageConfigRecord = {
+      id: 1,
+      name: 's3',
+      type: 's3',
+      isEnabled: true,
+    };
     const user: UserInfo = { id: '1', email: 'a@b.c', name: 'A' };
 
     expect(config).toBeDefined();

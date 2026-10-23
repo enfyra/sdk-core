@@ -24,10 +24,29 @@ export class StorageManager {
     const headers = params.uploadId
       ? { 'x-enfyra-upload-id': params.uploadId }
       : undefined;
-    const response = await this.client.post<FileRecord>('/enfyra_file', formData, {
+    const response = await this.client.post<unknown>('/enfyra_file', formData, {
       headers,
     });
-    return response.data;
+    const receipt = response.data;
+    const record = Array.isArray(receipt) && receipt.length === 1 ? receipt[0] : receipt;
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      throw new Error('Upload did not return one file record');
+    }
+    const raw = record as Record<string, unknown>;
+    const id = raw.id ?? raw._id;
+    const name = raw.name ?? raw.filename;
+    if ((typeof id !== 'string' && typeof id !== 'number') || typeof name !== 'string') {
+      throw new Error('Upload returned an invalid file record');
+    }
+    const size = raw.size ?? raw.filesize;
+    const mimeType = raw.mimeType ?? raw.mimetype;
+    return {
+      ...raw,
+      id,
+      name,
+      ...(typeof size === 'number' ? { size } : {}),
+      ...(typeof mimeType === 'string' ? { mimeType } : {}),
+    };
   }
 
   getDownloadUrl(fileId: number | string): string {

@@ -9,6 +9,7 @@ export class WebSocketClient {
   private ws: Socket | null = null;
   private socketIOClient: typeof import('socket.io-client').io | null = null;
   private connectPromise: Promise<void> | null = null;
+  private generation = 0;
   private readonly listeners = new Map<string, Set<WebSocketEventHandler>>();
   private readonly config: Required<
     Pick<
@@ -44,8 +45,9 @@ export class WebSocketClient {
   connect(): Promise<void> {
     if (this.ws?.connected) return Promise.resolve();
     if (!this.connectPromise) {
-      this.connectPromise = this.createSocket().finally(() => {
-        this.connectPromise = null;
+      const current = this.generation;
+      this.connectPromise = this.createSocket(current).finally(() => {
+        if (current === this.generation) this.connectPromise = null;
       });
     }
     return this.connectPromise;
@@ -69,12 +71,15 @@ export class WebSocketClient {
   }
 
   disconnect(): void {
+    this.generation++;
+    this.connectPromise = null;
     this.ws?.disconnect();
     this.ws = null;
   }
 
-  private async createSocket(): Promise<void> {
+  private async createSocket(current: number): Promise<void> {
     const io = await this.loadSocketIO();
+    if (current !== this.generation) return;
     const baseUrl = this.config.baseUrl
       ? this.config.baseUrl.replace(/\/+$/, '')
       : typeof window !== 'undefined'
@@ -111,9 +116,7 @@ export class WebSocketClient {
           .catch(() => callback({}));
       };
     }
-    return this.config.authToken
-      ? { token: this.config.authToken }
-      : undefined;
+    return this.config.authToken ? { token: this.config.authToken } : undefined;
   }
 
   private async loadSocketIO(): Promise<typeof import('socket.io-client').io> {

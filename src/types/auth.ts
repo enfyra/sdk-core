@@ -7,6 +7,10 @@ export interface AuthTokens {
   loginProvider?: string | null;
 }
 
+export interface TokenPersistence {
+  sync(): void;
+}
+
 export interface LoginCredentials {
   email: string;
   password: string;

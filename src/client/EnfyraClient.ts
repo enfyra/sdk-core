@@ -179,7 +179,7 @@ export class EnfyraClient {
     const response = await this.http.fetch(firstInput, init);
     if (
       response.status !== 401 ||
-      !this.http.isEnfyraUrl(input) ||
+      !this.http.isEnfyraUrl(this.http.resolveFetchUrl(input)) ||
       this.hasExplicitAuthorization(input, init) ||
       !this.isReplayableBody(init?.body) ||
       this.auth.strategy !== 'token' ||
@@ -254,13 +254,10 @@ export class EnfyraClient {
     }
 
     const baseUrl = config.baseURL ?? instance.defaults.baseURL;
-    if (!baseUrl) return true;
-    if (baseUrl.replace(/\/+$/, '') === this.http.baseUrl) return true;
-
-    const resolved = `${baseUrl.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`;
-    return /^[a-z][a-z\d+.-]*:/i.test(resolved)
-      ? this.http.isEnfyraUrl(resolved)
-      : false;
+    const resolved = baseUrl
+      ? `${baseUrl.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`
+      : url;
+    return this.http.isEnfyraUrl(resolved);
   }
 
   private hasHeaderSetter(
@@ -268,9 +265,9 @@ export class EnfyraClient {
   ): headers is { set(name: string, value: string): unknown } {
     return Boolean(
       headers &&
-        typeof headers === 'object' &&
-        'set' in headers &&
-        typeof headers.set === 'function',
+      typeof headers === 'object' &&
+      'set' in headers &&
+      typeof headers.set === 'function',
     );
   }
 

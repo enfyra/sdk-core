@@ -34,6 +34,7 @@ export class AuthManager {
   private readonly endpoints: AuthEndpoints;
   private tokens: AuthTokens | null = null;
   private refreshPromise: Promise<AuthTokens> | null = null;
+  private generation = 0;
 
   constructor(
     private readonly http: HttpClient,
@@ -61,6 +62,8 @@ export class AuthManager {
       });
     }
 
+    const current = ++this.generation;
+    this.refreshPromise = null;
     const response = await this.http.post<AuthTokens>(
       this.endpoints.login,
       credentials,
@@ -71,6 +74,7 @@ export class AuthManager {
       return { strategy: 'cookie', authenticated: true };
     }
 
+    this.assertGeneration(current);
     const tokens = this.normalizeTokens(response.data);
     this.persistTokens(tokens);
     return { strategy: 'token', tokens };
@@ -83,28 +87,34 @@ export class AuthManager {
     }
     if (this.config.strategy !== 'token') return;
 
-    try {
-      if (this.tokens?.refreshToken) {
-        await this.http.post(this.endpoints.logout, {
-          refreshToken: this.tokens.refreshToken,
-        });
-      }
-    } finally {
-      this.clearTokens();
+    const tokens = this.tokens;
+    this.clearTokens();
+    if (tokens?.refreshToken) {
+      await this.http.post(
+        this.endpoints.logout,
+        {
+          refreshToken: tokens.refreshToken,
+        },
+        {
+          auth: false,
+          headers: { Authorization: `Bearer ${tokens.accessToken}` },
+        },
+      );
     }
   }
 
   refreshToken(): Promise<AuthTokens> {
     this.requireTokenStrategy('Token refresh');
     if (!this.refreshPromise) {
-      this.refreshPromise = this.performRefreshToken().finally(() => {
-        this.refreshPromise = null;
+      const current = this.generation;
+      this.refreshPromise = this.performRefreshToken(current).finally(() => {
+        if (current === this.generation) this.refreshPromise = null;
       });
     }
     return this.refreshPromise;
   }
 
-  private async performRefreshToken(): Promise<AuthTokens> {
+  private async performRefreshToken(current: number): Promise<AuthTokens> {
     if (!this.tokens?.refreshToken) {
       throw new EnfyraError({
         code: 'UNAUTHORIZED',
@@ -119,14 +129,16 @@ export class AuthManager {
         { refreshToken: this.tokens.refreshToken },
         { auth: false },
       );
+      this.assertGeneration(current);
       const tokens = this.normalizeTokens(
         response.data,
-        this.tokens.refreshToken,
+        this.tokens?.refreshToken,
       );
       this.persistTokens(tokens);
       return tokens;
     } catch (error) {
       if (
+        current === this.generation &&
         error instanceof EnfyraError &&
         (error.statusCode === 400 || error.statusCode === 401)
       ) {
@@ -138,11 +150,14 @@ export class AuthManager {
 
   async exchangeApiToken(apiToken: string): Promise<AuthTokens> {
     this.requireTokenStrategy('API-token exchange');
+    const current = ++this.generation;
+    this.refreshPromise = null;
     const response = await this.http.post<AuthTokens>(
       this.endpoints.apiTokenExchange,
       { apiToken },
       { auth: false },
     );
+    this.assertGeneration(current);
     const tokens = this.normalizeTokens(response.data);
     this.persistTokens(tokens);
     return tokens;
@@ -150,11 +165,14 @@ export class AuthManager {
 
   async exchangeOAuthCode(code: string): Promise<AuthTokens> {
     this.requireTokenStrategy('OAuth-code exchange');
+    const current = ++this.generation;
+    this.refreshPromise = null;
     const response = await this.http.post<AuthTokens>(
       this.endpoints.oauthExchange,
       { code },
       { auth: false },
     );
+    this.assertGeneration(current);
     const tokens = this.normalizeTokens(response.data);
     this.persistTokens(tokens);
     return tokens;
@@ -188,7 +206,9 @@ export class AuthManager {
   }
 
   async getMe(): Promise<UserInfo | null> {
-    const response = await this.http.get<UserInfo | UserInfo[]>(this.endpoints.me);
+    const response = await this.http.get<UserInfo | UserInfo[]>(
+      this.endpoints.me,
+    );
     if (Array.isArray(response.data)) return response.data[0] ?? null;
     return response.data;
   }
@@ -209,6 +229,8 @@ export class AuthManager {
     expTime?: number,
   ): Promise<void> {
     this.requireTokenStrategy('Setting tokens');
+    this.generation++;
+    this.refreshPromise = null;
     const tokens =
       typeof tokensOrAccessToken === 'string'
         ? this.normalizeTokens({
@@ -239,7 +261,8 @@ export class AuthManager {
       ) {
         throw new EnfyraError({
           code: 'VALIDATION_ERROR',
-          message: 'OAuth state must be a string no longer than 4096 characters',
+          message:
+            'OAuth state must be a string no longer than 4096 characters',
         });
       }
       params.set('state', options.state);
@@ -265,7 +288,18 @@ export class AuthManager {
     this.tokens = tokens;
   }
 
+  private assertGeneration(current: number): void {
+    if (current !== this.generation)
+      throw new EnfyraError({
+        code: 'UNAUTHORIZED',
+        message: 'Authentication operation was superseded',
+        statusCode: 401,
+      });
+  }
+
   private clearTokens(): void {
+    this.generation++;
+    this.refreshPromise = null;
     this.tokens = null;
     this.http.removeHeader('Authorization');
   }
